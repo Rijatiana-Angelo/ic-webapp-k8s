@@ -1,0 +1,123 @@
+#deploy
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: odoo
+  labels:
+    app: odoo
+    env: prod
+  namespace: ic-webapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: odoo
+  template:
+    metadata:
+      labels:
+        app: odoo
+    spec:
+      containers:
+      - image: odoo
+        name: odoo
+        env:
+        - name: USER
+          value: toto
+        - name: HOST
+          value: postgres
+        - name: PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: odoo
+              key: PASSWORD
+        ports:
+        - containerPort: 8069
+          name: odoo
+        volumeMounts:
+        - name: odoo-persistent-storage
+          mountPath: /etc/odoo
+        - name: lib-odoo-persistent-storage
+          mountPath: /var/lib/odoo
+        - name: extra-addons-persistent-storage
+          mountPath: /mnt/extra-addons
+      volumes:
+      - name: odoo-persistent-storage
+        hostPath:
+          path: /data_docker/config
+      - name: extra-addons-persistent-storage
+        hostPath:
+          path: /data_docker/addons
+      - name: lib-odoo-persistent-storage
+        persistentVolumeClaim:
+          claimName: odoo-pvc
+
+#secret
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  creationTimestamp: null
+  name: odoo
+  namespace: ic-webapp
+  labels:
+    env: prod
+    app: odoo
+data:
+  PASSWORD: dG90bw==
+
+#nodeport
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: odoo
+  labels:
+    app: odoo
+    env: prod
+  namespace: ic-webapp
+spec:
+  type: NodePort
+  selector:
+    app: odoo
+  ports:
+  - protocol: TCP
+    port: 8069
+    targetPort: 8069
+    nodePort: 30069
+
+#pv
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: odoo-pv
+  labels:
+    type: local
+    env: prod
+  namespace: ic-webapp
+spec:
+  storageClassName: manual
+  capacity:
+    storage: 20Gi
+  accessModes:
+  - ReadWriteMany
+  hostPath:
+    path: "/data_k8s/lib-odoo"
+
+#pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: odoo-pvc
+  labels:
+    app: odoo
+    env: prod
+  namespace: ic-webapp
+spec:
+  storageClassName: manual
+  accessModes:
+  - ReadWriteMany
+  resources:
+    requests:
+      storage: 7Gi
